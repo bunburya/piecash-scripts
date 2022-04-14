@@ -105,7 +105,7 @@ def currency_conversion_on_date(commodity: piecash.Commodity, currency: piecash.
 
 
 def get_historical_balance(account: piecash.Account, recurse: bool = True, commodity: piecash.Commodity = None,
-                           natural_sign: bool = True, at_date: date = None,
+                           natural_sign: bool = True, at_date: date = None, via: list[piecash.Commodity] = None,
                            closest_conv_cache: dict[tuple, dict[date, float]] = None) -> float:
     """
     Returns the balance of the account (including its children accounts if recurse=True) expressed in account's
@@ -117,6 +117,8 @@ def get_historical_balance(account: piecash.Account, recurse: bool = True, commo
     :param natural_sign: True if the balance sign is reversed for accounts of type {'LIABILITY', 'PAYABLE', 'CREDIT',
         'INCOME', 'EQUITY'} (default to True)
     :param at_date: The sum() balance of the account at a given date based on transaction post date
+    :param via: A commodity to convert to as an intermediate step if a direct conversion is not possible. If not
+        specified, the currency of the parent account will be used.
     :param closest_conv_cache: An internal cache of closest-in-time commodity prices. Keys are commodities; values are
         dicts mapping dates to prices. Used internally where recurse and use_historical are both True. Should not
         generally be explicitly provided in external calls.
@@ -147,15 +149,24 @@ def get_historical_balance(account: piecash.Account, recurse: bool = True, commo
             balance = balance * factor
         except (PriceNotFoundError, GncConversionError):
             # conversion is done from self.commodity to self.parent.commodity and then to commodity
-            if at_date is not None:
-                factor1 = currency_conversion_on_date(account.commodity, account.parent.commodity, at_date,
-                                                      closest_conv_cache)
-                factor2 = currency_conversion_on_date(account.parent.commodity, commodity, at_date, closest_conv_cache)
-            else:
-                factor1 = float(account.commodity.currency_conversion(account.parent.commodity))
-                factor2 = float(account.parent.commodity.currency_conversion(commodity))
-            factor = factor1 * factor2
-            balance = balance * factor
+            if not via:
+                via = [account.parent.commodity]
+            while via:
+                try:
+                    v = via.pop()
+                    if at_date is not None:
+                        factor1 = currency_conversion_on_date(account.commodity, v, at_date,
+                                                              closest_conv_cache)
+                        factor2 = currency_conversion_on_date(v, commodity, at_date, closest_conv_cache)
+                    else:
+                        factor1 = float(account.commodity.currency_conversion(v))
+                        factor2 = float(v.currency_conversion(commodity))
+                    factor = factor1 * factor2
+                    balance = balance * factor
+                    break
+                except (PriceNotFoundError, GncConversionError):
+                    continue
+
 
     if recurse and account.children:
         balance += sum(
@@ -165,6 +176,7 @@ def get_historical_balance(account: piecash.Account, recurse: bool = True, commo
                 commodity=commodity,
                 natural_sign=False,
                 at_date=at_date,
+                via=via,
                 closest_conv_cache=closest_conv_cache
             )
             for acc in account.children

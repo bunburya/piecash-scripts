@@ -14,8 +14,6 @@ from account_data import ALL_ASSETS, CASH_ASSETS, NON_CASH_ASSETS, get_expenses
 from src.analysis import BookAnalysis
 from src.utils import top_and_other
 
-DATA_FILE = argv[1]
-
 # Charts:
 # - Total net assets over time (line chart)
 # - Current cash by currency (pie chart)
@@ -27,7 +25,8 @@ DATA_FILE = argv[1]
 START = date(2021, 9, 1)
 END = date.today()
 STEP = timedelta(weeks=1)
-CURRENCY = 'EUR'
+CURRENCY = 'GBP'
+VIA = ['EUR', 'USD']
 #TOP_N = 10  #: For datasets with many categories, display largest TOP_N categories separately + "Other" category
 
 
@@ -35,6 +34,7 @@ def generate_plots(book: piecash.Book):
 
     analysis = BookAnalysis(book)
     EXPENSES = get_expenses(analysis.root_account)
+    via = [analysis.book.commodities(mnemonic=c) for c in VIA]
 
     print('Setting up grid.')
     fig = plt.figure(figsize=(20, 10))
@@ -49,9 +49,9 @@ def generate_plots(book: piecash.Book):
     # Totals: Total assets, separated into cash and non-cash assets as a stacked area chart, plus a line indicating net
     # assets.
     totals_df = pd.DataFrame({
-        'Net': analysis.agg_balance_over_time(ALL_ASSETS + ['Liabilities'], START, END, STEP, CURRENCY),
-        'Cash': analysis.agg_balance_over_time(CASH_ASSETS, START, END, STEP, CURRENCY),
-        'Non-cash': analysis.agg_balance_over_time(NON_CASH_ASSETS, START, END, STEP, CURRENCY)
+        'Net': analysis.agg_balance_over_time(ALL_ASSETS + ['Liabilities'], START, END, STEP, CURRENCY, via),
+        'Cash': analysis.agg_balance_over_time(CASH_ASSETS, START, END, STEP, CURRENCY, via),
+        'Non-cash': analysis.agg_balance_over_time(NON_CASH_ASSETS, START, END, STEP, CURRENCY, via)
     })
     totals_ax.set_title('Totals')
     totals_ax.stackplot(

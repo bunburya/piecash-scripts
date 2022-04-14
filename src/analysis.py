@@ -69,13 +69,13 @@ class BookAnalysis:
             balances[acct.name] = get_historical_balance(acct, commodity=currency, at_date=at_date)
         return pd.Series(balances)
 
-    def agg_balance(self, account_names: list[str], currency: piecash.Commodity,
+    def agg_balance(self, account_names: list[str], currency: piecash.Commodity, via: piecash.Commodity = None,
                     at_date: date = None) -> float:
         """Get the total aggregate balance of all given accounts, in the specified currency, as at the given date (or
         today's date if no date specified).
         """
         return sum(get_historical_balance(
-            self.get_account(a), commodity=currency, at_date=at_date, natural_sign=False
+            self.get_account(a), commodity=currency, at_date=at_date, via=via, natural_sign=False
         ) for a in account_names)
 
     def diff_balance(self, account: piecash.Account, start: date, end: date,
@@ -142,7 +142,8 @@ class BookAnalysis:
         return pd.DataFrame(data)
 
     def agg_balance_over_time(self, account_names: list[str], start: date, end: date, step: timedelta,
-                              currency: Optional[Union[str, piecash.Commodity]]) -> pd.Series:
+                              currency: Optional[Union[str, piecash.Commodity]],
+                              via: Optional[list[piecash.Commodity]] = None) -> pd.Series:
         """Returns a :class:`pandas.Series` containing the aggregate balance of the specified accounts over time.
 
         :param account_names: A list of full names of the accounts (see docs for :method:`get_account`).
@@ -151,7 +152,8 @@ class BookAnalysis:
         :param step: Frequency of reported values.
         :param currency: The currency in which to express all values. as a :class:`piecash.Commodity` or an ISO 4217
             string.
-
+        :param via: A list of currency to try converting to as an intermediate step, if a direct conversion is not
+            available.
         """
         if (currency is not None) and (not isinstance(currency, piecash.Commodity)):
             currency = self.book.commodities(mnemonic=currency)
@@ -159,7 +161,7 @@ class BookAnalysis:
         data = []
         for d in date_range(start, end, step):
             index.append(d)
-            data.append(self.agg_balance(account_names, currency, d))
+            data.append(self.agg_balance(account_names, currency, via, d))
         return pd.Series(data, index)
 
     def balance_over_time(self, account_name: str, start: date, end: date, step: timedelta,
